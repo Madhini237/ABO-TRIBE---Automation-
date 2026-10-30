@@ -1,0 +1,14 @@
+{
+  "default_city": "Coimbatore",
+  "default_region": "Tamil Nadu",
+  "alternative_city": "Kanyakumari",
+  "alternative_region": "Tamil Nadu",
+  "duplicate_city": "Coonoor",
+  "duplicate_regions": ["Tamil Nadu", "Tamilnadu"],
+  "search_city": "Pune",
+  "search_city_region": "Maharastra",
+  "invalid_query": "zzzzqqqq",
+  "no_bars_city": "",
+  "recent_city": "Coonoor",
+  "bars_max_scrolls": 8
+}

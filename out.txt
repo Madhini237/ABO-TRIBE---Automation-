@@ -1,0 +1,10 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.6, pytest-9.1.0, pluggy-1.6.0 -- C:\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Users\Admin\ABO-TRIBE---Automation-
+configfile: pytest.ini
+plugins: xdist-3.8.0
+collecting ... collected 3 items
+
+tests/test_login.py::TestLogin::test_login_positive_with_valid_phone_and_otp FAILED [ 33%]
+tests/test_login.py::TestLogin::test_login_negative_invalid_otp 
