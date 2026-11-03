@@ -159,9 +159,174 @@ class AndroidSettingsLocators:
     LOCATION_ALLOW_ASK = ("id", "com.android.permissioncontroller:id/ask_radio_button")
     LOCATION_DENY = ("id", "com.android.permissioncontroller:id/deny_radio_button")
     LOCATION_SWITCH = ("xpath", "//android.widget.Switch[@resource-id='android:id/switch_widget']")
+    PRECISE_LOCATION_SWITCH = (
+        "xpath",
+        "//*[@resource-id='com.android.permissioncontroller:id/precise_location_switch' or "
+        "(contains(@text,'Use precise location') and "
+        "(@checkable='true' or @class='android.widget.Switch'))]",
+    )
 
     SYSTEM_ALLOW_FOREGROUND = ("id", "com.android.permissioncontroller:id/permission_allow_foreground_only_button")
     SYSTEM_ALLOW_ONE_TIME = ("id", "com.android.permissioncontroller:id/permission_allow_one_time_button")
     SYSTEM_ALLOW = ("id", "com.android.permissioncontroller:id/permission_allow_button")
     SYSTEM_DENY = ("id", "com.android.permissioncontroller:id/permission_deny_button")
     SYSTEM_DENY_DONT_ASK = ("id", "com.android.permissioncontroller:id/permission_deny_and_dont_ask_again_button")
+
+
+def _lower_contains(*needles):
+    """Build a case-insensitive content-desc/text contains() XPath."""
+    return (
+        "xpath",
+        "//*[" + " or ".join(
+            "contains(translate(@content-desc,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),"
+            f"'{needle.lower()}') or "
+            "contains(translate(@text,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),"
+            f"'{needle.lower()}')"
+            for needle in needles
+        ) + "]",
+    )
+
+
+def _lower_equals(*needles):
+    """Build a case-insensitive content-desc/text equals() XPath."""
+    return (
+        "xpath",
+        "//*[" + " or ".join(
+            "translate(@content-desc,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')="
+            f"'{needle.lower()}' or "
+            "translate(@text,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')="
+            f"'{needle.lower()}'"
+            for needle in needles
+        ) + "]",
+    )
+
+
+class CoinLocators:
+    """Coin wallet and Coin History screen elements.
+
+    The XPaths are deliberately text based: the wallet labels are rendered as
+    content descriptions in the current build and do not have stable
+    resource-ids. The page object also parses ``page_source`` directly so
+    grouped transaction rows remain readable if the accessibility tree changes.
+    """
+
+    # Wallet entry / title
+    COINS_ENTRY = _lower_contains("coin", "coin balance", "my coins")
+    BALANCE = _lower_contains(
+        "coin balance", "available coins", "total coins", "my coins", "balance"
+    )
+    HISTORY_ENTRY = _lower_contains("coin history", "transaction history", "history", "transactions")
+    HISTORY_TITLE = _lower_contains("coin history", "transaction history", "transactions")
+    HISTORY_LIST = (
+        "xpath",
+        "//androidx.recyclerview.widget.RecyclerView | "
+        "//android.widget.ListView | "
+        "//*[@scrollable='true']",
+    )
+
+    # Transaction rows (parsed from page source as well)
+    TRANSACTION_ROW = (
+        "xpath",
+        "//*[@clickable='true' and ("
+        "contains(@content-desc,'+') or contains(@content-desc,'-') or "
+        "contains(@text,'+') or contains(@text,'-'))]",
+    )
+    CREDIT_INDICATOR = _lower_contains("credit", "credited", "earned", "added", "bonus")
+    DEBIT_INDICATOR = _lower_contains("debit", "debited", "deducted", "spent", "used")
+
+    # Page states
+    EMPTY_STATE = _lower_contains(
+        "no coin history",
+        "no transactions",
+        "no transaction history",
+        "nothing here yet",
+        "no activity",
+        "haven't earned",
+        "have not earned",
+    )
+    ERROR_STATE = _lower_contains(
+        "unable to load",
+        "failed to load",
+        "couldn't load",
+        "could not load",
+        "something went wrong",
+        "network error",
+        "no internet",
+        "you're offline",
+        "you’re offline",
+        "offline",
+    )
+    RETRY = _lower_equals("retry", "try again", "refresh")
+    REFRESH = _lower_contains("refresh", "pull to refresh")
+    BACK = _lower_equals("back", "close")
+    USER_SWITCHER = _lower_contains("switch user", "switch account", "change user", "change account")
+    PURCHASE_TITLE = _lower_contains(
+        "coin purchase", "buy coins", "purchase coins", "add coins", "top up", "top-up", "recharge"
+    )
+    INSUFFICIENT_MESSAGE = _lower_contains(
+        "insufficient coin",
+        "insufficient balance",
+        "not enough coin",
+        "not enough balance",
+        "you don't have enough",
+        "you do not have enough",
+    )
+    NOT_CHECKED_IN_MESSAGE = _lower_contains(
+        "not checked in",
+        "not checked-in",
+        "please check in",
+        "please check-in",
+        "check-in required",
+        "check in required",
+        "you must be checked in",
+    )
+    FEATURE_UNAVAILABLE_MESSAGE = _lower_contains(
+        "feature currently unavailable",
+        "currently unavailable",
+        "feature unavailable",
+        "not available",
+        "disabled",
+        "turned off",
+        "not enabled",
+    )
+    CONFIRM = _lower_equals("confirm", "yes", "ok", "continue", "proceed")
+    CANCEL = _lower_equals("cancel", "no", "close")
+
+
+class CoinActionLocators:
+    """Entry points used to earn or spend coins from the bar/home flows."""
+
+    HOME_TAB = ("xpath", "//android.widget.Button[@content-desc='Home']")
+    BAR_CARD = ("xpath", "//*[@clickable='true' and contains(@content-desc, '•')]")
+    CHECK_IN_BUTTON = _lower_contains("check in", "check-in", "checkin")
+    CHECKED_IN_BANNER = _lower_contains("checked in", "checked-in", "you're in", "you are in")
+    CHECK_IN_PENDING = _lower_contains("check-in pending", "check in pending", "pending approval")
+    CHECK_IN_REJECTED = _lower_contains("check-in rejected", "check in rejected", "rejected", "declined")
+    CHECK_IN_SUCCESS = _lower_contains(
+        "checked in successfully", "check-in successful", "check in successful", "you're checked in"
+    )
+
+    SKIP_THE_QUEUE = _lower_contains("skip the queue", "skip queue")
+    SONG_REQUEST = _lower_contains("song request", "request a song")
+    SHOUTOUT_REQUEST = _lower_contains("shoutout", "shout out")
+    GAME = _lower_contains("game", "play")
+    GAME_ENTRY = _lower_contains("game entry", "entry fee", "play game", "start game")
+    GAME_PLAY = _lower_contains("play", "start", "roll", "dice")
+    GAME_RESULT = _lower_contains("you won", "you win", "congratulations", "better luck", "you lost")
+
+    FORM_INPUT = ("xpath", "//android.widget.EditText")
+    SUBMIT = _lower_contains("submit", "send", "request", "confirm", "continue", "save")
+    PROFILE_ENTRY = _lower_equals("profile", "my profile")
+    EDIT_PROFILE = _lower_contains("edit profile", "edit")
+    SAVE_PROFILE = _lower_contains("save", "update", "submit")
+    MENU = _lower_equals("menu")
+    HOME_MENU_TAP = (660, 107)  # icon beside the coins balance (see LoginPage.logout)
+
+    COIN_PURCHASE = _lower_contains(
+        "coin purchase", "buy coins", "purchase coins", "add coins", "top up", "top-up", "recharge"
+    )
+    PURCHASE_BUTTON = _lower_contains("buy", "purchase", "add coins", "recharge")

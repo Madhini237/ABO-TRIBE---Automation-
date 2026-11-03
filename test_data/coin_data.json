@@ -1,0 +1,111 @@
+{
+  "transaction_types": {
+    "signup_bonus": {
+      "direction": "credit",
+      "aliases": ["Signup Bonus", "Sign Up Bonus", "Welcome Bonus"],
+      "settings_fields": ["signup_bonus_coin", "signup_bonus"]
+    },
+    "checkin_bonus": {
+      "direction": "credit",
+      "aliases": ["Check-in Bonus", "Checkin Bonus", "Check-in Reward"],
+      "settings_fields": ["checkin_bonus_coin", "check_in_bonus_coin"]
+    },
+    "referral_registration_bonus": {
+      "direction": "credit",
+      "aliases": ["Referral Registration Bonus", "Referral Signup Bonus"],
+      "settings_fields": [
+        "referral_registration_bonus_coin",
+        "referral_registration_coin",
+        "referral_bonus_coin"
+      ]
+    },
+    "referral_bonus": {
+      "direction": "credit",
+      "aliases": ["Referral Bonus", "Referral Reward", "Successful Referral"],
+      "settings_fields": ["referral_bonus_coin", "referral_reward_coin"]
+    },
+    "profile_completion_bonus": {
+      "direction": "credit",
+      "aliases": ["Profile Completion Bonus", "Profile Complete Bonus"],
+      "settings_fields": ["profile_complete_coin", "profile_completion_coin"]
+    },
+    "game_win_bonus": {
+      "direction": "credit",
+      "aliases": ["Game Win Bonus", "Game Win", "Win Bonus"],
+      "settings_fields": ["game_win_bonus_coin", "game_win_coin"]
+    },
+    "skip_the_queue": {
+      "direction": "debit",
+      "aliases": ["Skip the Queue", "Skip Queue"],
+      "settings_fields": ["skip_the_queue_coin", "skip_queue_coin"]
+    },
+    "song_request": {
+      "direction": "debit",
+      "aliases": ["Song Request"],
+      "settings_fields": ["song_request_coin", "song_request_coins"]
+    },
+    "shoutout_request": {
+      "direction": "debit",
+      "aliases": ["Shoutout Request", "Shout Out Request"],
+      "settings_fields": ["shoutout_request_coin", "shoutout_coin"]
+    },
+    "game_entry": {
+      "direction": "debit",
+      "aliases": ["Game Entry", "Entry Fee", "Game Fee"],
+      "settings_fields": ["game_entry_coin", "per_game_coins"]
+    }
+  },
+  "messages": {
+    "insufficient_coins": [
+      "Insufficient Coins",
+      "Insufficient Balance",
+      "Not enough coins",
+      "You do not have enough coins"
+    ],
+    "not_checked_in": [
+      "User Not Checked-In",
+      "Please check in to continue",
+      "Check-in required"
+    ],
+    "feature_disabled": [
+      "Feature Currently Unavailable",
+      "Feature unavailable",
+      "This feature is currently unavailable"
+    ],
+    "empty_history": [
+      "No coin history",
+      "No transactions",
+      "Nothing here yet"
+    ],
+    "history_error": [
+      "Unable to load coin history",
+      "Failed to load",
+      "Something went wrong",
+      "No internet connection"
+    ]
+  },
+  "sample_amounts": {
+    "signup_bonus": 10,
+    "checkin_bonus": 5,
+    "referral_registration_bonus": 20,
+    "referral_bonus": 20,
+    "profile_completion_bonus": 10,
+    "game_entry": 1,
+    "game_win_bonus": 2,
+    "skip_the_queue": 5,
+    "song_request": 2,
+    "shoutout_request": 2
+  },
+  "backend_doctypes": {
+    "signup_bonus": "signup_bonus_coin",
+    "checkin_bonus": "checkin_bonus_coin",
+    "referral_registration_bonus": "referral_bonus_coin",
+    "referral_bonus": "referral_bonus_coin",
+    "profile_completion_bonus": "profile_completion_coin",
+    "game_entry": "per_game_coins",
+    "game_win_bonus": "per_game_coins",
+    "skip_the_queue": "skip_the_queue_coin_deduct",
+    "song_request": "song_request_coin_deduct",
+    "shoutout_request": "shoutout_request_coin_deduct"
+  }
+}

@@ -21,6 +21,8 @@ class DeviceSnapshot:
     airplane_mode: int
     wifi_on: int
     mobile_data: int
+    location_providers: str
+    http_proxy: str
 
 
 class Adb:
@@ -89,6 +91,10 @@ class DeviceController:
             airplane_mode=self._int_setting("global", "airplane_mode_on", 0),
             wifi_on=self._int_setting("global", "wifi_on", 1),
             mobile_data=self._int_setting("global", "mobile_data", 1),
+            location_providers=self._str_setting(
+                "secure", "location_providers_allowed", ""
+            ),
+            http_proxy=self._str_setting("global", "http_proxy", ""),
         )
 
     def restore(self, snapshot: DeviceSnapshot):
@@ -107,6 +113,8 @@ class DeviceController:
             allow=snapshot.fine_location or snapshot.coarse_location,
             restart_app=False,
         )
+        self.set_location_providers(snapshot.location_providers)
+        self.set_http_proxy(snapshot.http_proxy)
         self.start_app()
 
     @staticmethod
@@ -121,12 +129,109 @@ class DeviceController:
         except (ValueError, subprocess.SubprocessError):
             return default
 
+    def _str_setting(self, namespace, key, default=""):
+        try:
+            raw = self.adb.shell("settings", "get", namespace, key).stdout.strip()
+            return default if raw.lower() == "null" else raw
+        except subprocess.SubprocessError:
+            return default
+
+    def sdk_version(self):
+        try:
+            return int(
+                self.adb.shell("getprop", "ro.build.version.sdk").stdout.strip()
+            )
+        except (ValueError, subprocess.SubprocessError):
+            return 0
+
     # --------------------------------------------------------- location perm
     def location_permission_granted(self):
         package_dump = self.adb.output("dumpsys", "package", LocationSettings.APP_PACKAGE)
         return self._granted(package_dump, "ACCESS_FINE_LOCATION") or self._granted(
             package_dump, "ACCESS_COARSE_LOCATION"
         )
+
+    def fine_location_granted(self):
+        package_dump = self.adb.output("dumpsys", "package", LocationSettings.APP_PACKAGE)
+        return self._granted(package_dump, "ACCESS_FINE_LOCATION")
+
+    def coarse_location_granted(self):
+        package_dump = self.adb.output("dumpsys", "package", LocationSettings.APP_PACKAGE)
+        return self._granted(package_dump, "ACCESS_COARSE_LOCATION")
+
+    def reset_location_permission_prompts(self):
+        """Clear the user-set/user-fixed flags so the runtime dialog can appear.
+
+        This is used by the first-time-grant flow. It is best-effort because
+        some OEM builds do not allow the flags to be cleared over adb.
+        """
+        for permission in (
+            "android.permission.ACCESS_FINE_LOCATION",
+            "android.permission.ACCESS_COARSE_LOCATION",
+        ):
+            self.adb.shell(
+                "pm",
+                "clear-permission-flags",
+                LocationSettings.APP_PACKAGE,
+                permission,
+                "user-set",
+                "user-fixed",
+            )
+        return True
+
+    def set_approximate_location_permission(self, restart_app=True):
+        """Grant only approximate (coarse) location permission.
+
+        Android 12+ exposes a "Use precise location" switch on the app's
+        Location permission page. Grant foreground access and then turn the
+        precise switch off, leaving the app with coarse location only.
+        """
+        self._ensure_location_permission_page()
+        allow = self._wait_any(AndroidSettingsLocators.LOCATION_ALLOW_FOREGROUND)
+        if allow is None:
+            raise AssertionError(
+                "Could not find the foreground location permission option"
+            )
+        allow.click()
+        time.sleep(2)
+
+        switch = self._wait_any(
+            AndroidSettingsLocators.PRECISE_LOCATION_SWITCH, timeout=6
+        )
+        if switch is None:
+            raise AssertionError(
+                "The device does not expose an approximate/precise location switch"
+            )
+
+        checked = (switch.get_attribute("checked") or "").strip().lower()
+        text = (switch.get_attribute("text") or "").strip().lower()
+        if checked == "true" or text in ("on", "1", "true"):
+            try:
+                switch.click()
+            except Exception:
+                bounds = switch.get_attribute("bounds") or ""
+                match = re.match(
+                    r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds
+                )
+                if not match:
+                    raise
+                self.driver.tap(
+                    [(
+                        (int(match.group(1)) + int(match.group(3))) // 2,
+                        (int(match.group(2)) + int(match.group(4))) // 2,
+                    )]
+                )
+            time.sleep(2)
+
+        if not self.coarse_location_granted():
+            raise AssertionError("Approximate (coarse) location permission was not granted")
+        if self.fine_location_granted():
+            raise AssertionError(
+                "Precise location is still granted; approximate-only mode was not applied"
+            )
+
+        if restart_app:
+            self.start_app()
 
     def set_location_permission(self, allow: bool, restart_app=True):
         """Set the app's location permission through the Settings UI."""
@@ -289,6 +394,34 @@ class DeviceController:
             return True
         return False
 
+    # ------------------------------------------------------ location providers
+    def set_location_providers(self, providers):
+        """Write secure location_providers_allowed.
+
+        Pass "+gps,+network" to enable providers, "-gps,-network" to keep the
+        location-services switch on while removing every provider (GPS timeout
+        simulation), or the value captured by snapshot() to restore it.
+        """
+        result = self.adb.shell(
+            "settings", "put", "secure", "location_providers_allowed", providers
+        )
+        time.sleep(1)
+        return result.returncode == 0
+
+    def location_providers_enabled(self):
+        """Return True/False when the provider setting is usable, else None."""
+        value = self._str_setting(
+            "secure", "location_providers_allowed", ""
+        ).replace("+", "").lower()
+        if not value:
+            return None
+        tokens = [token.strip() for token in value.split(",") if token.strip()]
+        if any(token in ("-gps", "-network") for token in tokens):
+            return False
+        if any(token in ("gps", "network") for token in tokens):
+            return True
+        return None
+
     # -------------------------------------------------------------- network
     def set_airplane_mode(self, enabled: bool):
         state = "enable" if enabled else "disable"
@@ -317,6 +450,29 @@ class DeviceController:
                 return True
             time.sleep(1)
         return self.is_online(timeout=3) == online
+
+    def set_http_proxy(self, host_port):
+        """Point the device at an HTTP proxy (empty string clears it).
+
+        An unreachable proxy keeps the device connected while every backend
+        request fails, which lets a test exercise an API failure without
+        taking the whole device offline.
+        """
+        if host_port:
+            result = self.adb.shell(
+                "settings", "put", "global", "http_proxy", host_port
+            )
+        else:
+            self.adb.shell("settings", "put", "global", "http_proxy", ":0")
+            result = self.adb.shell("settings", "delete", "global", "http_proxy")
+        time.sleep(1)
+        return result.returncode == 0
+
+    def clear_http_proxy(self):
+        return self.set_http_proxy("")
+
+    def http_proxy(self):
+        return self._str_setting("global", "http_proxy", "")
 
     # ------------------------------------------------------------- settings
     def _wait_any(self, locator, timeout=None):

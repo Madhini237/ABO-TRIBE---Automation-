@@ -7,8 +7,24 @@
   "duplicate_regions": ["Tamil Nadu", "Tamilnadu"],
   "search_city": "Pune",
   "search_city_region": "Maharastra",
+  "locality_query": "RS Puram",
+  "locality_parent_city": "Coimbatore",
+  "landmark_query": "Gandhipuram Bus Stand",
+  "landmark_parent_city": "Coimbatore",
   "invalid_query": "zzzzqqqq",
   "no_bars_city": "",
   "recent_city": "Coonoor",
-  "bars_max_scrolls": 8
+  "bars_max_scrolls": 8,
+  "max_bar_radius_km": 100,
+  "excluded_bar_markers": ["deleted", "demo"],
+  "non_customer_bar_markers": [
+    "test",
+    "dummy",
+    "staff",
+    "internal",
+    "inactive",
+    "disabled",
+    "draft",
+    "hidden"
+  ]
 }

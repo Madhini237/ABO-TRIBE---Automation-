@@ -1,10 +1,16 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
 
+from pages.coin_actions_page import CoinActionsPage
+from pages.coin_history_page import CoinHistoryPage
 from pages.location_page import LocationPage
 from pages.nearby_bars_page import NearbyBarsPage
+from utils.api_helpers import AboBackendClient
 from utils.device_control import DeviceController
 
 
@@ -79,3 +85,52 @@ def preserve_device_state(device):
         device.restore(snapshot)
     except Exception as error:  # restore is best-effort; never mask a test failure
         print(f"WARNING: could not fully restore device state: {error}")
+
+
+# ---------------------------------------------------------------------------
+# Coin wallet / Coin History fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def coin_history_page(driver, device):
+    return CoinHistoryPage(driver, device=device)
+
+
+@pytest.fixture
+def coin_actions(driver):
+    return CoinActionsPage(driver)
+
+
+@pytest.fixture
+def backend():
+    """Backend client for balance, transaction and reward validation.
+
+    Backend-only tests skip when ABO_API_BASE_URL is not configured instead of
+    silently passing without checking the requirement.
+    """
+    client = AboBackendClient.from_env()
+    if not client.configured:
+        pytest.skip(
+            "Set ABO_API_BASE_URL and ABO_API_TOKEN (or ABO_API_KEY/"
+            "ABO_API_SECRET) to run backend coin validation"
+        )
+    return client
+
+
+@pytest.fixture
+def coin_data():
+    path = Path(__file__).resolve().parent.parent / "test_data" / "coin_data.json"
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+@pytest.fixture
+def coin_app(coin_history_page):
+    """Launch the app and require an authenticated Coin History screen."""
+    if not coin_history_page.launch_app():
+        if coin_history_page.is_login_screen():
+            pytest.skip("ABO Tribe is signed out; sign in before running coin tests")
+        raise AssertionError("The ABO Tribe app did not open")
+    if not coin_history_page.open_history():
+        pytest.skip("Coin History is not reachable in the current app build")
+    return coin_history_page

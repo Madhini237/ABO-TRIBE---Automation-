@@ -284,3 +284,18 @@ class NearbyBarsPage:
             assert card["name"], f"Bar card has no name: {card['raw']!r}"
             assert card["meters"] >= 0, f"Invalid distance on bar card: {card['raw']!r}"
             assert card["city"], f"Bar card has no city: {card['raw']!r}"
+
+    def assert_distances_within_radius(self, cards, max_km):
+        """Flag bars whose distance is impossible for the selected city.
+
+        A bar plotted with the wrong coordinates (or copied from another city)
+        usually shows up as an implausibly large distance.
+        """
+        assert cards, "No eligible nearby bars were returned"
+        limit = max_km * 1000
+        for card in cards:
+            assert card["meters"] <= limit, (
+                f"{card['name']} is {card['meters'] / 1000:.1f} km from the selected "
+                f"location, which is outside the {max_km} km sanity radius; "
+                "the bar coordinates are probably wrong"
+            )

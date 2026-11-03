@@ -76,6 +76,55 @@ class SignupPage:
     def request_otp(self):
         self.login_page.request_otp()
 
+    def apply_referral_code(self, referral_code):
+        """Enter an optional referral code before requesting the OTP.
+
+        Referral entry is rendered either directly on the phone screen or
+        behind a "Have a referral code?" action, depending on the build. Both
+        paths are attempted; the caller decides whether a missing field should
+        skip the referral test.
+        """
+        if not referral_code:
+            return False
+
+        referral_input = (
+            AppiumBy.XPATH,
+            "//android.widget.EditText[contains(translate(@hint,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'referral') or "
+            "contains(translate(@text,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'referral') or "
+            "contains(translate(@content-desc,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'referral')]",
+        )
+
+        fields = self.driver.find_elements(*referral_input)
+        if fields:
+            fields[0].clear()
+            fields[0].send_keys(referral_code)
+            return True
+
+        entry = (
+            AppiumBy.XPATH,
+            "//*[contains(translate(@content-desc,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'referral') or "
+            "contains(translate(@text,"
+            "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'referral')]",
+        )
+        for element in self.driver.find_elements(*entry):
+            try:
+                if not element.is_displayed():
+                    continue
+                element.click()
+                time.sleep(1)
+                fields = self.driver.find_elements(*referral_input)
+                if fields:
+                    fields[0].clear()
+                    fields[0].send_keys(referral_code)
+                    return True
+            except Exception:
+                continue
+        return False
+
     def enter_otp(self, otp):
         self.login_page.enter_otp(otp)
         self.login_page.verify_otp()

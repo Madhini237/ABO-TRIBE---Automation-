@@ -89,16 +89,20 @@ class LocationPage:
     def selected_location_element(self):
         candidates = []
         for element in self.driver.find_elements(*HomeLocators.LOCATION_HEADER):
-            raw = (element.get_attribute("content-desc") or "").strip()
-            # The home search bar also contains commas, but it is a single-line
-            # label starting with "Search for". Bar cards further down the feed
-            # are two-line labels containing a distance bullet. The real header
-            # is the only two-line, non-card label in the top 180 px.
-            if "\n" not in raw or raw.lower().startswith("search for"):
+            try:
+                raw = (element.get_attribute("content-desc") or "").strip()
+                # The home search bar also contains commas, but it is a
+                # single-line label starting with "Search for". Bar cards
+                # further down the feed are two-line labels containing a
+                # distance bullet. The real header is the only two-line,
+                # non-card label in the top 180 px.
+                if "\n" not in raw or raw.lower().startswith("search for"):
+                    continue
+                if "•" in raw or "·" in raw:
+                    continue
+                bounds = element.get_attribute("bounds") or ""
+            except StaleElementReferenceException:
                 continue
-            if "•" in raw or "·" in raw:
-                continue
-            bounds = element.get_attribute("bounds") or ""
             match = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
             if not match:
                 continue
@@ -113,7 +117,10 @@ class LocationPage:
         element = self.selected_location_element()
         if element is None:
             return None
-        return (element.get_attribute("content-desc") or "").strip()
+        try:
+            return (element.get_attribute("content-desc") or "").strip()
+        except StaleElementReferenceException:
+            return None
 
     def selected_city(self):
         text = self.selected_location()
@@ -321,6 +328,16 @@ class LocationPage:
         self.wait_for_home()
         return True
 
+    def select_first_search_result(self):
+        """Select the first result of the current search (used for locality/landmark)."""
+        results = self.get_search_results()
+        if not results:
+            return False
+        results[0]["element"].click()
+        time.sleep(3)
+        self.wait_for_home()
+        return True
+
     def select_visible_city(self, city, region=None, min_top=0):
         candidates = []
         for element in self.driver.find_elements(
@@ -422,6 +439,23 @@ class LocationPage:
             "go to settings",
         )
         return any(phrase in text for phrase in phrases)
+
+    def _page_text(self):
+        return self.driver.page_source.lower()
+
+    def has_save_failure(self):
+        markers = (
+            "could not save",
+            "failed to save",
+            "unable to save",
+            "save failed",
+            "location could not be saved",
+        )
+        return any(marker in self._page_text() for marker in markers)
+
+    def has_save_success(self):
+        markers = ("location saved", "saved successfully", "location updated")
+        return any(marker in self._page_text() for marker in markers)
 
     def has_location_error_dialog(self):
         return bool(
