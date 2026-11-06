@@ -1,11 +1,12 @@
 import os
-from getpass import getpass
 
 import pytest
 from dotenv import load_dotenv
 from selenium.webdriver.support.ui import WebDriverWait
 
 from pages.signup_page import SignupPage
+from utils.auth_flow import prompt_mobile_number, request_otp_and_capture
+from utils.otp_reader import OtpReader
 
 load_dotenv()
 
@@ -15,18 +16,22 @@ def signup_page(driver):
     return SignupPage(driver)
 
 
-def enter_manual_otp(mobile_number):
-    """Read the fresh OTP without echoing it to test output."""
-    otp = getpass(f"Enter the latest OTP sent to {mobile_number}: ").strip()
-    assert otp, "OTP cannot be blank"
-    return otp
-
-
 def enter_manual_mobile_number():
     """Read the new user's phone number at test runtime."""
-    mobile_number = input("Enter a new 10-digit signup mobile number: ").strip()
-    SignupPage.ensure_new_mobile_number(mobile_number)
-    return mobile_number
+    return prompt_mobile_number(
+        "Enter a new 10-digit signup mobile number: ",
+        validator=SignupPage.ensure_new_mobile_number,
+    )
+
+
+def request_fresh_otp(driver, signup_page, mobile_number):
+    """Open the OTP screen and capture the SMS that arrives afterwards."""
+    if signup_page.is_otp_screen_for_mobile(mobile_number):
+        # The pending OTP is already the newest message; do not exclude it.
+        return OtpReader(driver).read_otp(mobile_number=mobile_number)
+
+    signup_page.prepare_login_screen()
+    return request_otp_and_capture(driver, signup_page, mobile_number)
 
 
 @pytest.mark.signup
@@ -49,13 +54,8 @@ def test_signup_rejects_invalid_mobile_number(driver, signup_page):
 @pytest.mark.positive
 def test_signup_new_user_and_keep_authenticated_session(driver, signup_page):
     mobile_number = enter_manual_mobile_number()
-    pending_otp = signup_page.is_otp_screen_for_mobile(mobile_number)
-    if not pending_otp:
-        signup_page.prepare_login_screen()
-        signup_page.enter_mobile_number(mobile_number)
-        signup_page.request_otp()
+    otp = request_fresh_otp(driver, signup_page, mobile_number)
 
-    otp = enter_manual_otp(mobile_number)
     signup_page.enter_otp(otp)
     stage = signup_page.wait_for_registration_stage()
     if stage == "profile":
@@ -74,12 +74,8 @@ def test_signup_new_user_and_keep_authenticated_session(driver, signup_page):
 def test_signup_skip_profile_guest_dashboard_auth_prompt(driver, signup_page, auth_choice):
     """A new user can skip optional profile setup and choose an auth path from Coins."""
     mobile_number = enter_manual_mobile_number()
-    if not signup_page.is_otp_screen_for_mobile(mobile_number):
-        signup_page.prepare_login_screen()
-        signup_page.enter_mobile_number(mobile_number)
-        signup_page.request_otp()
+    otp = request_fresh_otp(driver, signup_page, mobile_number)
 
-    otp = enter_manual_otp(mobile_number)
     signup_page.enter_otp(otp)
     stage = signup_page.wait_for_registration_stage()
     if stage == "profile":

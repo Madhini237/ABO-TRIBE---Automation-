@@ -401,10 +401,9 @@ class CoinSettings:
     INVALID_REFERRAL_CODE = os.getenv(
         "COIN_INVALID_REFERRAL_CODE", "INVALID-REFERRAL"
     )
+    # OTPs are captured from the device SMS notification (see utils/otp_reader).
     SIGNUP_MOBILE = os.getenv("COIN_SIGNUP_MOBILE", "")
-    SIGNUP_OTP = os.getenv("COIN_SIGNUP_OTP", "")
     REFERRER_MOBILE = os.getenv("COIN_REFERRER_MOBILE", "")
-    REFERRER_OTP = os.getenv("COIN_REFERRER_OTP", "")
     OTHER_USER_MOBILE = os.getenv("COIN_OTHER_USER_MOBILE", "")
     DISABLED_FEATURE = os.getenv("COIN_DISABLED_FEATURE", "")
     PROFILE_DATA = os.getenv("SIGNUP_PROFILE_DATA", "{}")

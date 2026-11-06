@@ -14,11 +14,24 @@ python -m pip install -r requirements.txt
 Credentials and device-specific values are read from `.env`:
 
 ```text
-TEST_MOBILE_NUMBER=...
-TEST_OTP=...
 INVALID_TEST_OTP=...
 SIGNUP_PROFILE_DATA={"Full Name":"...","Email":"..."}
+# Optional: restores this user's session after coin signup flows
+TEST_MOBILE_NUMBER=...
 ```
+
+## Login / signup OTP tests
+
+`tests/test_login.py`, `tests/test_signup.py` and the coin signup/login flows
+ask for the mobile number at runtime (or use a configured number when a flow
+needs a specific user) and capture the OTP from the SMS notification on the
+device, so no fixed OTP is entered. Keep the device unlocked with SMS
+notifications enabled. The wait time defaults to 120 seconds and can be changed
+with `OTP_WAIT_TIMEOUT`. The shared flow lives in `utils/auth_flow.py` so future
+suites can reuse it instead of duplicating login/signup steps.
+
+`tests/test_otp_reader.py` and `tests/test_auth_flow.py` cover OTP extraction
+and the shared flow; they run without a device.
 
 ## Running
 
@@ -83,16 +96,17 @@ When the API is not configured, backend-only tests skip with a clear message.
 ### Flow-specific test data
 
 ```text
-COIN_SIGNUP_MOBILE=...            # new user for signup/referral/profile flows
-COIN_SIGNUP_OTP=...
+COIN_SIGNUP_MOBILE=...            # optional; otherwise prompted at runtime
 COIN_REFERRAL_CODE=...
 COIN_REFERRER_MOBILE=...          # user who owns the referral reward
-COIN_REFERRER_OTP=...
 COIN_BAR_NAME=...                 # bar used for check-in/feature flows
 COIN_GAME_NAME=Dice
 COIN_DISABLED_FEATURE=song_request
 COIN_OTHER_USER_MOBILE=...
 ```
+
+OTPs for these users are read from the device's SMS notification, so
+`COIN_SIGNUP_OTP` and `COIN_REFERRER_OTP` are no longer used.
 
 Amounts are read from ABO Settings through the API. For UI-only runs they can
 be supplied explicitly, but they must match the active configuration:

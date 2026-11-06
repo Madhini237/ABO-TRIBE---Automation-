@@ -4,6 +4,7 @@ import pytest
 from dotenv import load_dotenv
 
 from pages.login_page import LoginPage
+from utils.auth_flow import prompt_mobile_number, request_otp_and_capture
 
 load_dotenv()
 
@@ -19,23 +20,22 @@ def required_env(name):
     return value
 
 
-def enter_manual_mobile_number():
-    mobile_number = input("Enter a 10-digit mobile number for the resend OTP test: ").strip()
-    digits = "".join(character for character in mobile_number if character.isdigit())
-    assert len(digits) == 10, "Enter a valid 10-digit mobile number"
-    return digits
-
-
 def negative_test_mobile_number():
     configured = os.getenv("NEGATIVE_TEST_MOBILE_NUMBER")
-    valid_number = required_env("TEST_MOBILE_NUMBER")
+    saved_number = "".join(
+        character
+        for character in os.getenv("TEST_MOBILE_NUMBER", "")
+        if character.isdigit()
+    )
     if configured:
-        assert configured != valid_number, "Negative test number must differ from TEST_MOBILE_NUMBER"
+        assert configured != saved_number, "Negative test number must differ from TEST_MOBILE_NUMBER"
         return configured
 
     # Use a separate 10-digit India mobile-format number when no test number
-    # is configured. Keep it distinct from the configured and sample numbers.
-    fixed_numbers = {valid_number, "9999999999"}
+    # is configured. Keep it distinct from any saved and sample numbers.
+    fixed_numbers = {"9999999999"}
+    if saved_number:
+        fixed_numbers.add(saved_number)
     candidate = 6_000_000_001
     while candidate < 10_000_000_000:
         number = str(candidate)
@@ -47,13 +47,13 @@ def negative_test_mobile_number():
 
 @pytest.mark.login
 @pytest.mark.positive
-def test_successful_login_and_logout(driver, login_page):
-    mobile_number = required_env("TEST_MOBILE_NUMBER")
-    otp = required_env("TEST_OTP")
+def test_successful_login_with_manual_mobile_and_screen_otp(driver, login_page):
+    mobile_number = prompt_mobile_number(
+        "Enter your 10-digit mobile number to receive a live OTP: "
+    )
 
     login_page.prepare_login_screen()
-    login_page.enter_mobile_number(mobile_number)
-    login_page.request_otp()
+    otp = request_otp_and_capture(driver, login_page, mobile_number)
     login_page.enter_otp(otp)
     login_page.verify_otp()
 
@@ -81,7 +81,7 @@ def test_invalid_otp_for_different_mobile_number(driver, login_page):
 
 @pytest.mark.login
 def test_resend_otp(driver, login_page):
-    mobile_number = enter_manual_mobile_number()
+    mobile_number = prompt_mobile_number()
 
     login_page.prepare_login_screen()
     login_page.enter_mobile_number(mobile_number)

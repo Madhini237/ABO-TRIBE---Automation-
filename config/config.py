@@ -14,9 +14,9 @@ class Config:
     IMPLICIT_WAIT = 10
     EXPLICIT_WAIT = 20
 
-    # Test credentials as per requirement
+    # Fixed sample number that signup must not reuse. OTPs are read from the
+    # device SMS notification instead of a configured value.
     VALID_PHONE = "9999999999"
-    VALID_OTP = "123456"
 
     # Timeouts
     PAGE_LOAD_TIMEOUT = 30

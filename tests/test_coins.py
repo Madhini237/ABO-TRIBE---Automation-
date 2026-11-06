@@ -24,9 +24,10 @@ Flow 9     Transaction integrity and retry safety
 Flow 10    ABO Settings coin configuration
 
 Tests that need a live backend skip when ``ABO_API_BASE_URL`` is not set.
-Tests that need a new user skip unless ``COIN_SIGNUP_MOBILE`` and
-``COIN_SIGNUP_OTP`` are configured, so the suite never burns an OTP by
-accident.
+Tests that need a new user prompt for a fresh mobile number (or use
+``COIN_SIGNUP_MOBILE``/``SIGNUP_MOBILE_NUMBER`` when configured) and capture
+the OTP from the device SMS notification, the same way the login/signup suite
+does.
 """
 
 from __future__ import annotations
@@ -39,9 +40,13 @@ from contextlib import contextmanager
 import pytest
 
 from config.settings import CoinSettings
-from pages.login_page import LoginPage
 from pages.signup_page import SignupPage
 from utils import coin_parser
+from utils.auth_flow import (
+    login_with_captured_otp,
+    prompt_mobile_number,
+    request_otp_and_capture,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -103,13 +108,8 @@ def _new_transactions(before, after):
     return [transaction for transaction in after if _tx_key(transaction) not in before_keys]
 
 
-def _login(driver, mobile_number, otp):
-    login = LoginPage(driver)
-    login.prepare_login_screen()
-    login.enter_mobile_number(mobile_number)
-    login.request_otp()
-    login.enter_otp(otp)
-    login.verify_otp()
+def _login(driver, mobile_number):
+    login = login_with_captured_otp(driver, mobile_number)
     assert login.is_dashboard_displayed(), "Could not sign in with the configured test user"
 
 
@@ -117,13 +117,12 @@ def _login(driver, mobile_number, otp):
 def _preserve_session(driver):
     """Restore the suite's signed-in user after a flow that registers a user."""
     mobile = os.getenv("TEST_MOBILE_NUMBER", "").strip()
-    otp = os.getenv("TEST_OTP", "").strip()
     try:
         yield
     finally:
-        if mobile and otp:
+        if mobile:
             try:
-                _login(driver, mobile, otp)
+                _login(driver, mobile)
             except Exception as error:  # best effort; never hide the real result
                 print(f"WARNING: could not restore the original login session: {error}")
 
@@ -139,24 +138,45 @@ def _profile_data():
     return data if isinstance(data, dict) else {}
 
 
-def _register_new_user(driver, referral_code=None, require_referral=False):
-    mobile = CoinSettings.SIGNUP_MOBILE or os.getenv("SIGNUP_MOBILE_NUMBER", "")
-    otp = CoinSettings.SIGNUP_OTP or os.getenv("SIGNUP_OTP", "")
-    if not mobile or not otp:
-        pytest.skip(
-            "Set COIN_SIGNUP_MOBILE and COIN_SIGNUP_OTP to exercise new-user coin "
-            "credit flows"
+def _signup_mobile():
+    """Return the configured new-user number, or ask for one at runtime."""
+    configured = CoinSettings.SIGNUP_MOBILE or os.getenv("SIGNUP_MOBILE_NUMBER", "")
+    if configured:
+        digits = "".join(character for character in configured if character.isdigit())
+        assert len(digits) >= 10, (
+            "COIN_SIGNUP_MOBILE must contain a 10-digit mobile number"
         )
+        return digits[-10:]
+
+    return prompt_mobile_number(
+        "Enter a new 10-digit mobile number for the coin signup flow: ",
+        validator=SignupPage.ensure_new_mobile_number,
+    )
+
+
+def _register_new_user(
+    driver,
+    referral_code=None,
+    require_referral=False,
+    mobile=None,
+):
+    mobile = mobile or _signup_mobile()
 
     signup = SignupPage(driver)
     signup.prepare_login_screen()
-    signup.enter_mobile_number(mobile)
-
     referral_applied = False
-    if referral_code:
-        referral_applied = signup.apply_referral_code(referral_code)
 
-    signup.request_otp()
+    def apply_referral():
+        nonlocal referral_applied
+        if referral_code:
+            referral_applied = signup.apply_referral_code(referral_code)
+
+    otp = request_otp_and_capture(
+        driver,
+        signup,
+        mobile,
+        before_request=apply_referral,
+    )
     signup.enter_otp(otp)
     stage = signup.wait_for_registration_stage()
 
@@ -608,11 +628,11 @@ def test_flow_02_03_referral_registration_bonus(driver, coin_history_page, backe
 @pytest.mark.coin_credits
 @pytest.mark.positive
 def test_flow_02_04_referral_bonus_for_referrer(driver, coin_history_page, backend):
-    if not CoinSettings.REFERRER_MOBILE or not CoinSettings.REFERRER_OTP:
-        pytest.skip("Set COIN_REFERRER_MOBILE and COIN_REFERRER_OTP to verify referral rewards")
+    if not CoinSettings.REFERRER_MOBILE:
+        pytest.skip("Set COIN_REFERRER_MOBILE to verify referral rewards")
 
     with _preserve_session(driver):
-        _login(driver, CoinSettings.REFERRER_MOBILE, CoinSettings.REFERRER_OTP)
+        _login(driver, CoinSettings.REFERRER_MOBILE)
         _launch_history(coin_history_page)
         transactions = coin_history_page.find_transactions("referral_bonus")
         if not transactions:
@@ -982,23 +1002,22 @@ def test_flow_06_disabled_feature_blocks_deduction(
 @pytest.mark.signup
 @pytest.mark.negative
 def test_flow_07_invalid_referral_is_not_rewarded(driver, coin_history_page, backend):
-    if not CoinSettings.SIGNUP_MOBILE or not CoinSettings.SIGNUP_OTP:
-        pytest.skip("Set COIN_SIGNUP_MOBILE and COIN_SIGNUP_OTP to test signup referral eligibility")
     if not CoinSettings.INVALID_REFERRAL_CODE:
         pytest.skip("Set COIN_INVALID_REFERRAL_CODE")
 
+    mobile = _signup_mobile()
     with _preserve_session(driver):
         try:
             mobile, _ = _register_new_user(
                 driver,
                 referral_code=CoinSettings.INVALID_REFERRAL_CODE,
                 require_referral=False,
+                mobile=mobile,
             )
         except Exception:
             # The correct behaviour for an invalid code can be to reject the
             # signup/OTP step outright. In that case there is no new user to
             # inspect, and no reward must have been created.
-            mobile = CoinSettings.SIGNUP_MOBILE
             assert not backend.get_reward_documents(
                 "referral_registration_bonus", user=mobile
             ), "The backend created a referral reward for a rejected invalid code"
@@ -1027,9 +1046,6 @@ def test_flow_07_invalid_referral_is_not_rewarded(driver, coin_history_page, bac
 def test_flow_08_profile_completion_without_checkin_not_rewarded(
     driver, coin_actions, coin_history_page, backend
 ):
-    if not CoinSettings.SIGNUP_MOBILE or not CoinSettings.SIGNUP_OTP:
-        pytest.skip("Set COIN_SIGNUP_MOBILE and COIN_SIGNUP_OTP to test profile eligibility")
-
     with _preserve_session(driver):
         mobile, _ = _register_new_user(driver)
         coin_actions.open_bar()
