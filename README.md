@@ -33,6 +33,13 @@ suites can reuse it instead of duplicating login/signup steps.
 `tests/test_otp_reader.py` and `tests/test_auth_flow.py` cover OTP extraction
 and the shared flow; they run without a device.
 
+## Manual test cases
+
+Profile feature manual test cases (positive, edit/view, module access and
+negative flows) are documented in the `tests/test_profile.py` module docstring.
+The document lists the env-driven test data, prerequisites and execution
+tracking columns.
+
 ## Running
 
 ```powershell
